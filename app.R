@@ -8,6 +8,8 @@ library(tidyr)
 library(scales)
 library(mFilter)
 library(tidyverse)
+library(lubridate)
+library(shinydashboard)
 rm(list=ls())
 hamveri <- readxl::read_xls("deneme.xls")
 colnames(hamveri)[1] <- "tarih"
@@ -45,21 +47,53 @@ veri <- left_join(my,mx)
 k <- as.numeric(length(unique(veri$degisken)))
 l <- as.numeric(length(unique(veri$tarih)))
 
-ui <- fluidPage(
-    titlePanel("Business Cycle Tracer for European Countries"),
-    sidebarLayout(
-        sidebarPanel(
-        wellPanel(
-            sliderInput("slider", "Time", 
-                        animate = T,step = 90,
-                        min = as.Date(head(tarih)[1]),
-                        max = as.Date(tail(tarih)[c(-1:-5)]),
-                        value = as.Date(head(tarih)[1]),
-                        timeFormat="%b %Y")
+ui <- dashboardPage(
+  dashboardHeader(title = "Business Cycle Tracer for European Countries"),
+    dashboardSidebar(
+        
+        sidebarMenu(
+          menuItem("Dashboard", tabName = "dashboard"),
+          menuItem("Raw data", tabName = "rawdata")
         )  
     ),
-    mainPanel(
-        shinydashboard::box(plotlyOutput("rectPlot"))
+  
+  dashboardBody(
+    tabItems(
+      tabItem("dashboard",
+              fluidRow(
+                box(
+                  width = 8, status = "info", solidHeader = TRUE,
+                  title = "Time interval",
+                  sliderInput("slider", "Time", 
+                            animate = T,step = 90,
+                            min = as.Date(head(tarih)[1]),
+                            max = as.Date(tail(tarih)[c(-1:-5)]),
+                            value = as.Date(head(tarih)[1]),
+                            timeFormat="%b %Y")),
+                valueBoxOutput(width = 2,"count"),
+                valueBoxOutput(width = 2,"users"),
+                valueBoxOutput(width = 2,"devices"),
+                valueBoxOutput(width = 2,"tools")
+              ),
+              fluidRow(
+                box(
+                  width = 8, status = "info", solidHeader = TRUE,
+                  title = "Business cycle situtation of the countries",
+                  plotlyOutput("rectPlot", width = "100%", height = 600)
+                ),
+                box(
+                  width = 4, status = "info",solidHeader = TRUE,
+                  title = "Situation of countries",
+                  DT::dataTableOutput("packageTable")
+                )
+              ) 
+      
+        ),
+      tabItem("rawdata",
+              numericInput("maxrows", "Rows to show", 25),
+              verbatimTextOutput("rawtable"),
+              downloadButton("downloadCsv", "Download as CSV")
+      )
     )
     )
     )
@@ -69,6 +103,63 @@ ui <- fluidPage(
 server <- function(input, output) {
     n <- reactive({
         verin <- veri %>% dplyr::filter(tarih == as.Date(input$slider))
+    })
+    output$packageTable <- DT::renderDataTable(
+      n() %>%
+        select("Date" = tarih, "Country" = degisken,x,y) %>%
+        mutate("Date" = as.character(zoo::as.yearqtr(Date)) ,
+          "State" = ifelse(x<=0 & y<0,"Recession",
+                                ifelse(x>0 & y<=0,"Recovery",
+                                       ifelse(x<=0 & y>0,"Slowdown",
+                                              ifelse(x>0 & y>=0,"Expansion",""))))) %>%
+        select(-x,-y) %>%
+        as.data.frame() 
+    , options = list(
+      lengthChange = FALSE,
+      pageLength = 45,
+      autowidth = TRUE,
+      scrollX = TRUE
+    ))
+    
+    statetable <- reactive({
+      tablo <- veri %>% dplyr::filter(tarih == as.Date(input$slider)) %>%
+        select("Date" = tarih, "Country" = degisken,x,y) %>%
+        mutate("Date" = as.character(zoo::as.yearqtr(Date)) ,
+               "State" = ifelse(x<=0 & y<0,"Recession",
+                                ifelse(x>0 & y<=0,"Recovery",
+                                       ifelse(x<=0 & y>0,"Slowdown",
+                                              ifelse(x>0 & y>=0,"Expansion",""))))) %>%
+        select(-x,-y) %>% select(State) %>%
+        as.data.frame() %>% table(.)
+    })
+    
+    output$count <- renderValueBox({
+      valueBox(
+        value = tryCatch(as.character(paste0(c(statetable())[[1]]," countries")),  error = function(e) as.character(0)),
+        subtitle = tryCatch(as.character(names(c(statetable()))[1]),  error = function(e) as.character(NULL)),
+        icon = icon("download")
+      )
+    })
+    output$users <- renderValueBox({
+      valueBox(
+        value = tryCatch(as.character(paste0(c(statetable())[[2]]," countries")),  error = function(e) as.character(0)),
+        subtitle = tryCatch(as.character(names(c(statetable()))[2]),  error = function(e) as.character(NULL)),
+        icon = icon("download")
+      )
+    })
+    output$devices <- renderValueBox({
+      valueBox(
+        value = tryCatch(as.character(paste0(c(statetable())[[3]]," countries")),  error = function(e) as.character(0)),
+        subtitle = tryCatch(as.character(names(c(statetable()))[3]),  error = function(e) as.character(NULL)),
+        icon = icon("download")
+      )
+    })
+    output$tools <- renderValueBox({
+      valueBox(
+        value = tryCatch(as.character(paste0(c(statetable())[[4]]," countries")),  error = function(e) as.character(0)),
+        subtitle = tryCatch(as.character(names(c(statetable()))[4]),  error = function(e) as.character(NULL)),
+        icon = icon("download")
+      )
     })
     name <- reactive({
         paste0("Yıllar itibariyla ", input$slider)
@@ -90,8 +181,8 @@ server <- function(input, output) {
                            shape = degisken, 
                            color = degisken), 
                        size = 5) +
-            scale_shape_manual(values = rep(15:19, len = k)) +
-            scale_color_manual(values = c(rep("darkblue", k/3+1),
+            scale_shape_manual(name = "", values = rep(15:19, len = k)) +
+            scale_color_manual(name = "", values = c(rep("darkblue", k/3+1),
                                           rep("blue", k/3),
                                           rep("steelblue4",k/3))) +
             theme(legend.position = "right",
@@ -103,7 +194,8 @@ server <- function(input, output) {
                   axis.text.y=element_blank(),
                   axis.ticks.y=element_blank(),
                   panel.background = element_blank()
-            )
+            ) +
+          guides(color = guide_legend(override.aes = list(size = 3) ) )
         ggplotly(p1, width = 900, height = 600)
     })
 }
