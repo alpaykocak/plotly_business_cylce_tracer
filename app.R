@@ -50,7 +50,7 @@ l <- as.numeric(length(unique(veri$tarih)))
 ui <- dashboardPage(
   dashboardHeader(title = "Business Cycle Tracer for European Countries"),
     dashboardSidebar(
-        
+      width = 100,
         sidebarMenu(
           menuItem("Dashboard", tabName = "dashboard"),
           menuItem("Raw data", tabName = "rawdata")
@@ -62,7 +62,7 @@ ui <- dashboardPage(
       tabItem("dashboard",
               fluidRow(
                 box(
-                  width = 8, status = "info", solidHeader = TRUE,
+                  width = 7, status = "info", solidHeader = TRUE,
                   title = "Time interval",
                   sliderInput("slider", "Time", 
                             animate = T,step = 90,
@@ -77,14 +77,19 @@ ui <- dashboardPage(
               ),
               fluidRow(
                 box(
-                  width = 8, status = "info", solidHeader = TRUE,
+                  width = 7, status = "info", solidHeader = TRUE,
                   title = "Business cycle situtation of the countries",
                   plotlyOutput("rectPlot", width = "100%", height = 600)
                 ),
                 box(
-                  width = 4, status = "info",solidHeader = TRUE,
+                  width = 2, status = "info",solidHeader = TRUE,
                   title = "Situation of countries",
-                  DT::dataTableOutput("packageTable")
+                  div(tableOutput("packageTable1"), style = "font-size:90%")
+                ),
+                box(
+                  width = 2, status = "info",solidHeader = TRUE,
+                  title = "Situation of countries",
+                  div(tableOutput("packageTable2"), style = "font-size:90%")
                 )
               ) 
       
@@ -104,7 +109,7 @@ server <- function(input, output) {
     n <- reactive({
         verin <- veri %>% dplyr::filter(tarih == as.Date(input$slider))
     })
-    output$packageTable <- DT::renderDataTable(
+    output$packageTable1 <- renderTable(
       n() %>%
         select("Date" = tarih, "Country" = degisken,x,y) %>%
         mutate("Date" = as.character(zoo::as.yearqtr(Date)) ,
@@ -113,13 +118,18 @@ server <- function(input, output) {
                                        ifelse(x<=0 & y>0,"Slowdown",
                                               ifelse(x>0 & y>=0,"Expansion",""))))) %>%
         select(-x,-y) %>%
-        as.data.frame() 
-    , options = list(
-      lengthChange = FALSE,
-      pageLength = 45,
-      autowidth = TRUE,
-      scrollX = TRUE
-    ))
+        slice(1:17))
+    output$packageTable2 <- renderTable(
+      n() %>%
+        select("Date" = tarih, "Country" = degisken,x,y) %>%
+        mutate("Date" = as.character(zoo::as.yearqtr(Date)) ,
+               "State" = ifelse(x<=0 & y<0,"Recession",
+                                ifelse(x>0 & y<=0,"Recovery",
+                                       ifelse(x<=0 & y>0,"Slowdown",
+                                              ifelse(x>0 & y>=0,"Expansion",""))))) %>%
+        select(-x,-y) %>%
+        slice(18:34)
+      )
     
     statetable <- reactive({
       tablo <- veri %>% dplyr::filter(tarih == as.Date(input$slider)) %>%
@@ -136,28 +146,28 @@ server <- function(input, output) {
     output$count <- renderValueBox({
       valueBox(
         value = tryCatch(as.character(paste0(c(statetable())[[1]]," countries")),  error = function(e) as.character(0)),
-        subtitle = tryCatch(as.character(names(c(statetable()))[1]),  error = function(e) as.character(NULL)),
+        subtitle = tryCatch(as.character(paste0("in ",names(c(statetable()))[1])),  error = function(e) as.character(NULL)),
         icon = icon("download")
       )
     })
     output$users <- renderValueBox({
       valueBox(
         value = tryCatch(as.character(paste0(c(statetable())[[2]]," countries")),  error = function(e) as.character(0)),
-        subtitle = tryCatch(as.character(names(c(statetable()))[2]),  error = function(e) as.character(NULL)),
+        subtitle = tryCatch(as.character(paste0("in ",names(c(statetable()))[2])),  error = function(e) as.character(NULL)),
         icon = icon("download")
       )
     })
     output$devices <- renderValueBox({
       valueBox(
         value = tryCatch(as.character(paste0(c(statetable())[[3]]," countries")),  error = function(e) as.character(0)),
-        subtitle = tryCatch(as.character(names(c(statetable()))[3]),  error = function(e) as.character(NULL)),
+        subtitle = tryCatch(as.character(paste0("in ",names(c(statetable()))[3])),  error = function(e) as.character(NULL)),
         icon = icon("download")
       )
     })
     output$tools <- renderValueBox({
       valueBox(
         value = tryCatch(as.character(paste0(c(statetable())[[4]]," countries")),  error = function(e) as.character(0)),
-        subtitle = tryCatch(as.character(names(c(statetable()))[4]),  error = function(e) as.character(NULL)),
+        subtitle = tryCatch(as.character(paste0("in ",names(c(statetable()))[4])),  error = function(e) as.character(NULL)),
         icon = icon("download")
       )
     })
@@ -167,6 +177,10 @@ server <- function(input, output) {
     output$rectPlot <- renderPlotly({
         verim <- as.data.frame(n())
         p1 <- ggplot() + 
+            annotate("text", x = 2.55, y = 2.75, label = "Expansion") + 
+            annotate("text", x = -2.55, y = 2.75, label = "Slowdown") + 
+            annotate("text", x = -2.55, y = -2.75, label = "Recession") + 
+            annotate("text", x = 2.55, y = -2.75, label = "Recovery") + 
             geom_rect(data=data.frame(xmin = -3, xmax = -0, ymin = -3, ymax = 0),
                       aes(xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax), fill="red", alpha=0.5) +
             geom_rect(data=data.frame(xmin = -3, xmax = -0, ymin = 0, ymax = 3),
@@ -177,7 +191,8 @@ server <- function(input, output) {
                       aes(xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax), fill="yellow", alpha=0.5) +
             geom_point(data = verim,
                        aes(x = x, 
-                           y = y, 
+                           y = y,
+                           text=paste('</br>Country: ',degisken),
                            shape = degisken, 
                            color = degisken), 
                        size = 5) +
@@ -196,7 +211,7 @@ server <- function(input, output) {
                   panel.background = element_blank()
             ) +
           guides(color = guide_legend(override.aes = list(size = 3) ) )
-        ggplotly(p1, width = 900, height = 600)
+        ggplotly(p1, width = 900, height = 600,tooltip = c("text")) %>% layout(legend = list(orientation = 'v'))
     })
 }
 # Run the application 
