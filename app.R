@@ -10,43 +10,45 @@ library(mFilter)
 library(tidyverse)
 library(lubridate)
 library(shinydashboard)
+library(zoo)
+library(rsdmx)
 rm(list=ls())
-hamveri <- readxl::read_xls("deneme.xls")
-colnames(hamveri)[1] <- "tarih"
-newnames <- substr(colnames(hamveri)[-1],start = 23,stop = 26)
-colnames(hamveri)[-1] <- newnames
-nzv <- caret::nzv(hamveri)
-hamveri <- hamveri[,-nzv]
-table(colSums(sapply(hamveri[-181,], is.na)))
-hamveri <- hamveri[-c(1:88,181),]
-hamveri <- hamveri[,-c(26,37)]
-table(colSums(sapply(hamveri[-181,], is.na)))
-hamveri <- ts(hamveri[,-1], frequency = 4, start = c(1997,1))
-newnames <- colnames(hamveri)
-my <- apply(hamveri,2,function(x){ 
-    res <- hpfilter(x,1600)
-    cyc <- res$cycle
-    return(cyc)
+url <-"https://stats.oecd.org/restsdmx/sdmx.ashx/GetData/QNA/AUS+AUT+BEL+CAN+CHL+COL+CZE+DNK+EST+FIN+FRA+DEU+GRC+HUN+ISL+IRL+ISR+ITA+JPN+KOR+LTU+LVA+LUX+MEX+NLD+NZL+NOR+POL+PRT+SVK+SVN+ESP+SWE+CHE+TUR+GBR+USA+EA19+EU27_2020+EU15+G-7+NAFTA+OECDE+G-20+OECD+OTF+NMEC+ARG+BRA+BGR+CHN+CRI+IND+IDN+ROU+RUS+SAU+ZAF.B1_GE.GYSA.Q/all?startTime=1997-Q1&endTime=2021-Q1"
+gdpgrowth <- readSDMX(url)
+gdpgrowth <- as.data.frame(gdpgrowth)
+gdpgrowth <- gdpgrowth %>% select("Countries" = LOCATION,"Date" = obsTime, "Veri" = obsValue)
+ulkeler <- unique(gdpgrowth$Countries)
+istenen <- c( "JPN", "KOR", "MEX", 
+              "TUR", "GBR", "USA",  "BRA",
+              "CHN", "RUS", "SAU", "DEU", 
+              "FRA", "CAN","ISR", "IND")
+gdpgrowth$Date <- as.Date(as.yearqtr(gdpgrowth$Date,format="%Y-Q%q"))
+gdpgrowth <- gdpgrowth %>% 
+  filter(Countries %in% istenen & Date >= as.Date("2016-01-01") & Date < as.Date("2021-01-01")) %>% 
+  spread(Countries,Veri) %>% 
+  select(-Date)
+datum <- data.frame(tarih = seq(as.Date("2016-03-31"),as.Date("2020-12-31"),by = "quarters")) 
+my <- apply(gdpgrowth,2,function(x){ 
+  res <- hpfilter(x,1600)
+  cyc <- res$cycle
+  return(cyc)
 })
-my <- ts(my, frequency = 4, start = c(1997,1))
-mx <- diff(my)
-my <- apply(my, 2, function(x){ rescale_mid(x,to = c(-2.95,2.95),mid = 0)})
-my <- ts(my, frequency = 4, start = c(1997,1))
-my <- window(my,start = c(1997,2))
-mx <- apply(mx, 2, function(x){ rescale_mid(x,to = c(-2.95,2.95),mid = 0)})
-mx <- ts(mx, frequency = 4, start = c(1997,2))
-tarih <- seq(as.Date("1997/4/1"), by = "quarter", length.out = dim(mx)[1])
-my <- as.data.frame(my) %>% mutate("tarih" = tarih)
-mx <- as.data.frame(mx) %>% mutate("tarih" = tarih)
-date <- data.frame(tarih = seq(as.Date(head(tarih)[1]),as.Date(tail(tarih)[c(-1:-5)]),by = "days"))
-my_long <- left_join(date,my) %>% fill_(fill_cols = colnames(left_join(date,my))[-1],.direction = "down")
-mx_long <- left_join(date,mx) %>% fill_(fill_cols = colnames(left_join(date,mx))[-1],.direction = "down")
-my <- my_long %>%  gather("degisken","y",-tarih) 
-mx <- mx_long %>%  gather("degisken","x",-tarih) 
-veri <- left_join(my,mx)
+date_sim <- data.frame(tarih = seq(as.Date(head(datum$tarih)[1]),as.Date(tail(datum$tarih)[c(-1:-5)]),by = "days"))
+my <- cbind(datum,as.data.frame(my)) %>% 
+  right_join(date_sim) %>%
+  arrange(tarih) %>%
+  mutate_if(is.numeric, na.approx)
+myts <- ts(my[,-1], frequency = 365.25, start = c(2016,31,3))
+mxts <- diff(myts)
+my[,-1] <- apply(my[,-1], 2, function(x){ rescale_mid(x,to = c(-2.95,2.95),mid = 0)})
+my <- my[-1,]
+mx <- cbind("tarih" = my$tarih, as.data.frame(apply(mxts, 2, function(x){ rescale_mid(x,to = c(-2.95,2.95),mid = 0)})))
+my_long <- my %>%  gather("degisken","y",-tarih) 
+mx_long <- mx %>%  gather("degisken","x",-tarih) 
+veri <- left_join(my_long,mx_long)
+tarih <- unique(veri$tarih)
 k <- as.numeric(length(unique(veri$degisken)))
 l <- as.numeric(length(unique(veri$tarih)))
-
 ui <- dashboardPage(
   dashboardHeader(title = "Business Cycle Tracer for European Countries"),
     dashboardSidebar(
@@ -65,7 +67,7 @@ ui <- dashboardPage(
                   width = 7, status = "info", solidHeader = TRUE,
                   title = "Time interval",
                   sliderInput("slider", "Time", 
-                            animate = T,step = 90,
+                            animate = T,step = 10,
                             min = as.Date(head(tarih)[1]),
                             max = as.Date(tail(tarih)[c(-1:-5)]),
                             value = as.Date(head(tarih)[1]),
@@ -73,7 +75,8 @@ ui <- dashboardPage(
                 valueBoxOutput(width = 2,"count"),
                 valueBoxOutput(width = 2,"users"),
                 valueBoxOutput(width = 2,"devices"),
-                valueBoxOutput(width = 2,"tools")
+                valueBoxOutput(width = 2,"tools"),
+                valueBoxOutput(width = 2,"days")
               ),
               fluidRow(
                 box(
@@ -106,35 +109,36 @@ ui <- dashboardPage(
     
   
 server <- function(input, output) {
+  cond <- c("Recession", "Recovery", "Slowdown", "Expansion")
     n <- reactive({
         verin <- veri %>% dplyr::filter(tarih == as.Date(input$slider))
     })
     output$packageTable1 <- renderTable(
       n() %>%
         select("Date" = tarih, "Country" = degisken,x,y) %>%
-        mutate("Date" = as.character(zoo::as.yearqtr(Date)) ,
+        mutate("Date" = as.character(zoo::as.yearmon(Date)) ,
           "State" = ifelse(x<=0 & y<0,"Recession",
                                 ifelse(x>0 & y<=0,"Recovery",
                                        ifelse(x<=0 & y>0,"Slowdown",
                                               ifelse(x>0 & y>=0,"Expansion",""))))) %>%
         select(-x,-y) %>%
-        slice(1:17))
+        slice(1:ceiling(k/2)))
     output$packageTable2 <- renderTable(
       n() %>%
         select("Date" = tarih, "Country" = degisken,x,y) %>%
-        mutate("Date" = as.character(zoo::as.yearqtr(Date)) ,
+        mutate("Date" = as.character(zoo::as.yearmon(Date)) ,
                "State" = ifelse(x<=0 & y<0,"Recession",
                                 ifelse(x>0 & y<=0,"Recovery",
                                        ifelse(x<=0 & y>0,"Slowdown",
                                               ifelse(x>0 & y>=0,"Expansion",""))))) %>%
         select(-x,-y) %>%
-        slice(18:34)
+        slice((ceiling(k/2)+1):k)
       )
     
     statetable <- reactive({
       tablo <- veri %>% dplyr::filter(tarih == as.Date(input$slider)) %>%
         select("Date" = tarih, "Country" = degisken,x,y) %>%
-        mutate("Date" = as.character(zoo::as.yearqtr(Date)) ,
+        mutate("Date" = as.character(zoo::as.yearmon(Date)) ,
                "State" = ifelse(x<=0 & y<0,"Recession",
                                 ifelse(x>0 & y<=0,"Recovery",
                                        ifelse(x<=0 & y>0,"Slowdown",
@@ -143,32 +147,45 @@ server <- function(input, output) {
         as.data.frame() %>% table(.)
     })
     
+    output$days <- renderValueBox({
+      valueBox(
+        value = as.character(as.yearmon(input$slider)),
+        subtitle = as.character("Date"),
+        color = "blue",
+        icon = icon("download")
+      )
+    })
+    
     output$count <- renderValueBox({
       valueBox(
-        value = tryCatch(as.character(paste0(c(statetable())[[1]]," countries")),  error = function(e) as.character(0)),
-        subtitle = tryCatch(as.character(paste0("in ",names(c(statetable()))[1])),  error = function(e) as.character(NULL)),
-        icon = icon("download")
+        value = tryCatch(as.character(paste0(c(statetable())[names(c(statetable())) == "Recession"][[1]]," country/s")),  error = function(e) as.character(paste0(0," country"))),
+        subtitle = as.character("in Recession"),
+        color = "red",
+        icon = icon("arrow-down")
       )
     })
     output$users <- renderValueBox({
       valueBox(
-        value = tryCatch(as.character(paste0(c(statetable())[[2]]," countries")),  error = function(e) as.character(0)),
-        subtitle = tryCatch(as.character(paste0("in ",names(c(statetable()))[2])),  error = function(e) as.character(NULL)),
-        icon = icon("download")
+        value = tryCatch(as.character(paste0(c(statetable())[names(c(statetable())) == "Recovery"][[1]]," country/s")),  error = function(e) as.character(paste0(0," country"))),
+        subtitle = as.character("in Recovery"),
+        color = "yellow",
+        icon = icon("arrow-right")
       )
     })
     output$devices <- renderValueBox({
       valueBox(
-        value = tryCatch(as.character(paste0(c(statetable())[[3]]," countries")),  error = function(e) as.character(0)),
-        subtitle = tryCatch(as.character(paste0("in ",names(c(statetable()))[3])),  error = function(e) as.character(NULL)),
-        icon = icon("download")
+        value = tryCatch(as.character(paste0(c(statetable())[names(c(statetable())) == "Slowdown"][[1]]," country/s")),  error = function(e) as.character(paste0(0," country"))),
+        subtitle = as.character("in Slowdown"),
+        color = "orange",
+        icon = icon("arrow-left")
       )
     })
     output$tools <- renderValueBox({
       valueBox(
-        value = tryCatch(as.character(paste0(c(statetable())[[4]]," countries")),  error = function(e) as.character(0)),
-        subtitle = tryCatch(as.character(paste0("in ",names(c(statetable()))[4])),  error = function(e) as.character(NULL)),
-        icon = icon("download")
+        value = tryCatch(as.character(paste0(c(statetable())[names(c(statetable())) == "Expansion"][[1]]," country/s")),  error = function(e) as.character(paste0(0," country"))),
+        subtitle = as.character("in Expansion"),
+        color = "green",
+        icon = icon("arrow-up")
       )
     })
     name <- reactive({
@@ -192,14 +209,14 @@ server <- function(input, output) {
             geom_point(data = verim,
                        aes(x = x, 
                            y = y,
-                           text=paste('</br>Country: ',degisken),
+                           text = paste('</br>Country: ', degisken),
                            shape = degisken, 
                            color = degisken), 
                        size = 5) +
             scale_shape_manual(name = "", values = rep(15:19, len = k)) +
-            scale_color_manual(name = "", values = c(rep("darkblue", k/3+1),
-                                          rep("blue", k/3),
-                                          rep("steelblue4",k/3))) +
+            scale_color_manual(name = "", values = c(rep("darkblue", ceiling(k/3)),
+                                          rep("blue", ceiling(k/3)),
+                                          rep("steelblue4",floor(k/3)))) +
             theme(legend.position = "right",
                   panel.grid = element_blank(),
                   axis.title.x=element_blank(), 
