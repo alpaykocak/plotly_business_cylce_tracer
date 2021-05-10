@@ -22,12 +22,19 @@ istenen <- c( "JPN", "KOR", "MEX",
               "TUR", "GBR", "USA",  "BRA",
               "CHN", "RUS", "SAU", "DEU", 
               "FRA", "CAN","ISR", "IND")
+isimler <- c("Japan","South Korea", "Mexico",
+             "Turkey","United Kingdom", "United States", "Brazil",
+             "China", "Russia", "Saudi Arabia", "Germany",
+             "France", "Canada", "Israel", "India")
+names(istenen) <- isimler
 gdpgrowth$Date <- as.Date(as.yearqtr(gdpgrowth$Date,format="%Y-Q%q"))
 gdpgrowth <- gdpgrowth %>% 
   filter(Countries %in% istenen & Date >= as.Date("2016-01-01") & Date < as.Date("2021-01-01")) %>% 
   spread(Countries,Veri) %>% 
   select(-Date)
+colnames(gdpgrowth) <- names(sort(istenen))
 datum <- data.frame(tarih = seq(as.Date("2016-03-31"),as.Date("2020-12-31"),by = "quarters")) 
+
 my <- apply(gdpgrowth,2,function(x){ 
   res <- hpfilter(x,1600)
   cyc <- res$cycle
@@ -48,14 +55,14 @@ mx_long <- mx %>%  gather("degisken","x",-tarih)
 veri <- left_join(my_long,mx_long)
 tarih <- unique(veri$tarih)
 k <- as.numeric(length(unique(veri$degisken)))
-l <- as.numeric(length(unique(veri$tarih)))
+
 ui <- dashboardPage(
-  dashboardHeader(title = "Business Cycle Tracer for European Countries"),
+  dashboardHeader(title = "Business Cycle Dashboard",titleWidth = 500),
     dashboardSidebar(
       width = 100,
         sidebarMenu(
           menuItem("Dashboard", tabName = "dashboard"),
-          menuItem("Raw data", tabName = "rawdata")
+          menuItem("Results", tabName = "rawdata")
         )  
     ),
   
@@ -66,41 +73,72 @@ ui <- dashboardPage(
                 box(
                   width = 7, status = "info", solidHeader = TRUE,
                   title = "Time interval",
-                  sliderInput("slider", "Time", 
+                  sliderInput("slider", "Month", 
                             animate = T,step = 10,
                             min = as.Date(head(tarih)[1]),
                             max = as.Date(tail(tarih)[c(-1:-5)]),
-                            value = as.Date(head(tarih)[1]),
+                            value = as.Date(tail(tarih)[c(-1:-5)]),
                             timeFormat="%b %Y")),
                 valueBoxOutput(width = 2,"count"),
                 valueBoxOutput(width = 2,"users"),
                 valueBoxOutput(width = 2,"devices"),
-                valueBoxOutput(width = 2,"tools"),
+                valueBoxOutput(width = 2,"tools")
+              ),
+              fluidRow(
                 valueBoxOutput(width = 2,"days")
               ),
               fluidRow(
                 box(
                   width = 7, status = "info", solidHeader = TRUE,
-                  title = "Business cycle situtation of the countries",
+                  title = "Business Cycle Situtation of the Selected Countries",
                   plotlyOutput("rectPlot", width = "100%", height = 600)
                 ),
+               
                 box(
                   width = 2, status = "info",solidHeader = TRUE,
-                  title = "Situation of countries",
-                  div(tableOutput("packageTable1"), style = "font-size:90%")
+                  title = "Countries in Recession",background = "red",
+                  div(tableOutput("packageTable1"), style = "font-size:100%")
                 ),
                 box(
                   width = 2, status = "info",solidHeader = TRUE,
-                  title = "Situation of countries",
-                  div(tableOutput("packageTable2"), style = "font-size:90%")
+                  title = "Countries in Recovery",background = "yellow",
+                  div(tableOutput("packageTable2"), style = "font-size:100%")
+                ),
+                box(
+                  width = 2, status = "info",solidHeader = TRUE,
+                  title = "Countries in Slowdown",background = "orange",
+                  div(tableOutput("packageTable3"), style = "font-size:100%")
+                ),
+                box(
+                  width = 2, status = "info",solidHeader = TRUE,
+                  title = "Countries in Expansion", background = "green",
+                  div(tableOutput("packageTable4"), style = "font-size:100%")
                 )
-              ) 
+              )
       
         ),
       tabItem("rawdata",
-              numericInput("maxrows", "Rows to show", 25),
-              verbatimTextOutput("rawtable"),
-              downloadButton("downloadCsv", "Download as CSV")
+              fluidRow(width=10,
+              hr(),
+              column(width = 3,
+                     box(
+                       status = "info", solidHeader = TRUE,
+                       title = "Country",       
+              selectInput("country",label = "Select Country",choices = isimler,multiple = F,selected = isimler[1])
+                     )
+              ),
+              box(
+                  width = 5, status = "info", solidHeader = TRUE,
+                  title = "Growth rates of the Selected Countries",
+                  plotOutput("graph")
+                ),
+              box(
+                width = 4, status = "info",solidHeader = TRUE,
+                title = "Countries Data",
+                DT::dataTableOutput("tablo")
+              )
+              )
+
       )
     )
     )
@@ -113,39 +151,41 @@ server <- function(input, output) {
     n <- reactive({
         verin <- veri %>% dplyr::filter(tarih == as.Date(input$slider))
     })
-    output$packageTable1 <- renderTable(
-      n() %>%
-        select("Date" = tarih, "Country" = degisken,x,y) %>%
-        mutate("Date" = as.character(zoo::as.yearmon(Date)) ,
-          "State" = ifelse(x<=0 & y<0,"Recession",
-                                ifelse(x>0 & y<=0,"Recovery",
-                                       ifelse(x<=0 & y>0,"Slowdown",
-                                              ifelse(x>0 & y>=0,"Expansion",""))))) %>%
-        select(-x,-y) %>%
-        slice(1:ceiling(k/2)))
-    output$packageTable2 <- renderTable(
-      n() %>%
+    
+    ozettable <- reactive({
+      tablo <- n() %>%
         select("Date" = tarih, "Country" = degisken,x,y) %>%
         mutate("Date" = as.character(zoo::as.yearmon(Date)) ,
                "State" = ifelse(x<=0 & y<0,"Recession",
                                 ifelse(x>0 & y<=0,"Recovery",
                                        ifelse(x<=0 & y>0,"Slowdown",
                                               ifelse(x>0 & y>=0,"Expansion",""))))) %>%
-        select(-x,-y) %>%
-        slice((ceiling(k/2)+1):k)
-      )
+        select(-x,-y)
+    })
     
     statetable <- reactive({
-      tablo <- veri %>% dplyr::filter(tarih == as.Date(input$slider)) %>%
-        select("Date" = tarih, "Country" = degisken,x,y) %>%
-        mutate("Date" = as.character(zoo::as.yearmon(Date)) ,
-               "State" = ifelse(x<=0 & y<0,"Recession",
-                                ifelse(x>0 & y<=0,"Recovery",
-                                       ifelse(x<=0 & y>0,"Slowdown",
-                                              ifelse(x>0 & y>=0,"Expansion",""))))) %>%
-        select(-x,-y) %>% select(State) %>%
+      tablo <- ozettable() %>% select(State) %>%
         as.data.frame() %>% table(.)
     })
+    
+    output$packageTable1 <- renderTable(
+      ozettable() %>%
+        filter(State == "Recession") %>% select(Country)
+      )
+    output$packageTable2 <- renderTable(
+      ozettable() %>%
+        filter(State == "Recovery") %>% select(Country)
+    )
+    
+    output$packageTable3 <- renderTable(
+      ozettable() %>%
+        filter(State == "Slowdown") %>% select(Country)
+    )
+    
+    output$packageTable4 <- renderTable(
+      ozettable() %>%
+        filter(State == "Expansion") %>% select(Country)
+    )
     
     output$days <- renderValueBox({
       valueBox(
@@ -188,9 +228,7 @@ server <- function(input, output) {
         icon = icon("arrow-up")
       )
     })
-    name <- reactive({
-        paste0("Yıllar itibariyla ", input$slider)
-    })
+
     output$rectPlot <- renderPlotly({
         verim <- as.data.frame(n())
         p1 <- ggplot() + 
@@ -218,6 +256,7 @@ server <- function(input, output) {
                                           rep("blue", ceiling(k/3)),
                                           rep("steelblue4",floor(k/3)))) +
             theme(legend.position = "right",
+                  plot.background = element_rect(fill = "white"),
                   panel.grid = element_blank(),
                   axis.title.x=element_blank(), 
                   axis.text.x=element_blank(),
@@ -229,6 +268,49 @@ server <- function(input, output) {
             ) +
           guides(color = guide_legend(override.aes = list(size = 3) ) )
         ggplotly(p1, width = 900, height = 600,tooltip = c("text")) %>% layout(legend = list(orientation = 'v'))
+    })
+    
+    result <- veri %>%
+      select("Date" = tarih, "Country" = degisken,x,y) %>%
+      mutate(
+        "State" = ifelse(x<=0 & y<0,"Recession",
+                         ifelse(x>0 & y<=0,"Recovery",
+                                ifelse(x<=0 & y>0,"Slowdown",
+                                       ifelse(x>0 & y>=0,"Expansion",""))))) %>%
+      select(-x,-y) %>% spread(Country,State) %>% filter(Date %in% datum$tarih) %>% bind_cols(gdpgrowth[-1,])
+    colnames(result) <- c("Date",paste0("State-",colnames(gdpgrowth)),paste0("Growth-",colnames(gdpgrowth)))
+    result <- result %>% gather("type","data",-Date) %>% 
+      separate(type,c("type2","Country"),"-") %>% spread(type2,data) %>% arrange(Country,Date) %>% 
+      mutate("Growth" = round(as.numeric(Growth),2))
+    
+    tablo <- reactive({
+      m <- result %>% filter(Country == input$country)
+    })
+    
+    output$tablo  <- DT::renderDataTable({
+      
+      DT::datatable(
+        { tablo() %>% mutate(Date = format(Date, format = "%b-%Y"))},
+        caption = "This table presents growth rate and corresponding business cycle sitation ",  
+        extensions = 'Buttons',
+        
+        options = list(
+          pageLength = as.numeric(length(unique(result$Date))),
+          paging = TRUE,
+          searching = TRUE,
+          fixedColumns = FALSE,
+          autoWidth = FALSE,
+          ordering = TRUE,
+          dom = 'ftpBRSQ',
+          buttons = c('copy', 'csv', 'excel')
+        ),
+        
+        class = "display"
+      )
+    })
+    
+    output$graph <- renderPlot({
+      result %>% filter(Country == input$country) %>% ggplot(aes(Date,Growth,group = Country,fill = Country)) + geom_line()
     })
 }
 # Run the application 
