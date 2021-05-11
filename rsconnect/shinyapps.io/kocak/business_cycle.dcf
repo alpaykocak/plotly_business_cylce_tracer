@@ -1,0 +1,13 @@
+name: business_cycle
+title: business_cycle
+username:
+account: kocak
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 4079398
+bundleId: 4587699
+url: https://kocak.shinyapps.io/business_cycle/
+when: 1620771720.56371
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: data_pull.R|DataGeneric.xml|deneme.xls|README.md|veriseti.xls
