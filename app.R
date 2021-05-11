@@ -3,7 +3,6 @@ library(plotly)
 library(dplyr)
 library(ggplot2)
 library(readr)
-library(caret)
 library(tidyr)
 library(scales)
 library(mFilter)
@@ -18,35 +17,56 @@ gdpgrowth <- readSDMX(url)
 gdpgrowth <- as.data.frame(gdpgrowth)
 gdpgrowth <- gdpgrowth %>% select("Countries" = LOCATION,"Date" = obsTime, "Veri" = obsValue)
 ulkeler <- unique(gdpgrowth$Countries)
-istenen <- c( "JPN", "KOR", "MEX", 
+istenen <- c( "JPN", "MEX", "OECD","NAFTA",
               "TUR", "GBR", "USA",  "BRA",
-              "CHN", "RUS", "SAU", "DEU", 
-              "FRA", "CAN","ISR", "IND")
-isimler <- c("Japan","South Korea", "Mexico",
+              "CHN", "RUS", "SAU", "EU27_2020", 
+              "ARG",  "G-20", "IND")
+isimler <- c("Japan", "Mexico", "OECD","NAFTA",
              "Turkey","United Kingdom", "United States", "Brazil",
-             "China", "Russia", "Saudi Arabia", "Germany",
-             "France", "Canada", "Israel", "India")
+             "China", "Russia", "Saudi Arabia", "EU27",
+             "Argentina", "G20", "India")
 names(istenen) <- isimler
-gdpgrowth$Date <- as.Date(as.yearqtr(gdpgrowth$Date,format="%Y-Q%q"))
+zaman <- unique(as.Date(as.yearqtr(gdpgrowth$Date,format="%Y-Q%q")))
+lenght_date <- length(zaman)
+init_date <- sort(zaman)[1]
+final_date <- sort(zaman)[lenght_date]
 gdpgrowth <- gdpgrowth %>% 
-  filter(Countries %in% istenen & Date >= as.Date("2016-01-01") & Date < as.Date("2021-01-01")) %>% 
-  spread(Countries,Veri) %>% 
+  filter(Countries %in% istenen) %>% 
+  spread(Countries,Veri) %>%
   select(-Date)
 colnames(gdpgrowth) <- names(sort(istenen))
-datum <- data.frame(tarih = seq(as.Date("2016-03-31"),as.Date("2020-12-31"),by = "quarters")) 
-
+gdpgrowth <- gdpgrowth[,sort(colnames(gdpgrowth))]
 my <- apply(gdpgrowth,2,function(x){ 
-  res <- hpfilter(x,1600)
-  cyc <- res$cycle
-  return(cyc)
+  filtered.x <- x
+  filtered.x[!is.na(x)] <- (hpfilter(x[!is.na(x)],1600))$cycle
+  return(filtered.x)
 })
-date_sim <- data.frame(tarih = seq(as.Date(head(datum$tarih)[1]),as.Date(tail(datum$tarih)[c(-1:-5)]),by = "days"))
+
+app_init_date <- if (quarter(init_date) == 1 & leap_year(init_date) == T) {init_date + 88 
+} else if (quarter(init_date) == 1 & leap_year(init_date) == F) {init_date + 88 
+} else if (quarter(init_date) == 2) {init_date + 88
+} else if (quarter(init_date) == 3) {init_date + 88
+} else { init_date + 88}
+app_final_date <- if (quarter(final_date) == 1 & leap_year(final_date) == T) {final_date + 88 
+} else if (quarter(final_date) == 1 & leap_year(final_date) == F) {final_date + 88 
+} else if (quarter(final_date) == 2) {final_date + 88
+} else if (quarter(final_date) == 3) {final_date + 88
+} else { final_date + 88}
+
+datum <- data.frame(tarih = seq(app_init_date,app_final_date,by = "quarters")) 
+date_sim <- data.frame(tarih = seq(app_init_date,app_final_date,by = "days"))
+
 my <- cbind(datum,as.data.frame(my)) %>% 
   right_join(date_sim) %>%
-  arrange(tarih) %>%
-  mutate_if(is.numeric, na.approx)
-myts <- ts(my[,-1], frequency = 365.25, start = c(2016,31,3))
-mxts <- diff(myts)
+  arrange(tarih) 
+
+for (i in colnames(my)[-1]) {
+  serie_init_ind = which(my[,i] == na.omit(my[,i])[1], arr.ind=TRUE)
+  serie_final_ind = which(my[,i] == na.omit(my[,i])[length(na.omit(my[,i]))], arr.ind=TRUE)
+  my[serie_init_ind:serie_final_ind,i] <- na.approx(my[,i][serie_init_ind:serie_final_ind])
+}
+
+mxts <- diff(ts(my[,-1]))
 my[,-1] <- apply(my[,-1], 2, function(x){ rescale_mid(x,to = c(-2.95,2.95),mid = 0)})
 my <- my[-1,]
 mx <- cbind("tarih" = my$tarih, as.data.frame(apply(mxts, 2, function(x){ rescale_mid(x,to = c(-2.95,2.95),mid = 0)})))
@@ -55,6 +75,8 @@ mx_long <- mx %>%  gather("degisken","x",-tarih)
 veri <- left_join(my_long,mx_long)
 tarih <- unique(veri$tarih)
 k <- as.numeric(length(unique(veri$degisken)))
+
+
 
 ui <- dashboardPage(
   dashboardHeader(title = "Business Cycle Dashboard",titleWidth = 500),
@@ -89,28 +111,28 @@ ui <- dashboardPage(
               ),
               fluidRow(
                 box(
-                  width = 7, status = "info", solidHeader = TRUE,
+                  width = 7, status = "info", solidHeader = TRUE, footer = "Calculations based on OECD Data.",
                   title = "Business Cycle Situtation of the Selected Countries",
                   plotlyOutput("rectPlot", width = "100%", height = 600)
                 ),
                
                 box(
-                  width = 2, status = "info",solidHeader = TRUE,
+                  width = 2, status = "info",solidHeader = TRUE,footer = "Calculations based on OECD Data.",
                   title = "Countries in Recession",background = "red",
                   div(tableOutput("packageTable1"), style = "font-size:100%")
                 ),
                 box(
-                  width = 2, status = "info",solidHeader = TRUE,
+                  width = 2, status = "info",solidHeader = TRUE,footer = "Calculations based on OECD Data.",
                   title = "Countries in Recovery",background = "yellow",
                   div(tableOutput("packageTable2"), style = "font-size:100%")
                 ),
                 box(
-                  width = 2, status = "info",solidHeader = TRUE,
+                  width = 2, status = "info",solidHeader = TRUE,footer = "Calculations based on OECD Data.",
                   title = "Countries in Slowdown",background = "orange",
                   div(tableOutput("packageTable3"), style = "font-size:100%")
                 ),
                 box(
-                  width = 2, status = "info",solidHeader = TRUE,
+                  width = 2, status = "info",solidHeader = TRUE,footer = "Calculations based on OECD Data.",
                   title = "Countries in Expansion", background = "green",
                   div(tableOutput("packageTable4"), style = "font-size:100%")
                 )
@@ -124,16 +146,16 @@ ui <- dashboardPage(
                      box(
                        status = "info", solidHeader = TRUE,
                        title = "Country",       
-              selectInput("country",label = "Select Country",choices = isimler,multiple = F,selected = isimler[1])
+              selectInput("country",label = "Select Country",choices = sort(isimler),multiple = F,selected = sort(isimler)[1])
                      )
               ),
               box(
-                  width = 5, status = "info", solidHeader = TRUE,
+                  width = 5, status = "info", solidHeader = TRUE,footer = "Source: OECD Data.",
                   title = "Growth rates of the Selected Countries",
                   plotOutput("graph")
                 ),
               box(
-                width = 4, status = "info",solidHeader = TRUE,
+                width = 4, status = "info",solidHeader = TRUE,footer = "Source: OECD Data. Calculations based on OECD Data.",
                 title = "Countries Data",
                 DT::dataTableOutput("tablo")
               )
@@ -276,12 +298,12 @@ server <- function(input, output) {
         "State" = ifelse(x<=0 & y<0,"Recession",
                          ifelse(x>0 & y<=0,"Recovery",
                                 ifelse(x<=0 & y>0,"Slowdown",
-                                       ifelse(x>0 & y>=0,"Expansion",""))))) %>%
+                                       ifelse(x>0 & y>=0,"Expansion","NA"))))) %>%
       select(-x,-y) %>% spread(Country,State) %>% filter(Date %in% datum$tarih) %>% bind_cols(gdpgrowth[-1,])
-    colnames(result) <- c("Date",paste0("State-",colnames(gdpgrowth)),paste0("Growth-",colnames(gdpgrowth)))
+    colnames(result) <- c("Date",paste0("State@",sort(names(istenen))),paste0("Growth@",sort(names(istenen))))
     result <- result %>% gather("type","data",-Date) %>% 
-      separate(type,c("type2","Country"),"-") %>% spread(type2,data) %>% arrange(Country,Date) %>% 
-      mutate("Growth" = round(as.numeric(Growth),2))
+      separate(type,c("type2","Country"),"@") %>% spread(type2,data) %>% arrange(Country,Date) %>% 
+      mutate("Growth" = round(as.numeric(Growth),2)) %>% filter( complete.cases(.))
     
     tablo <- reactive({
       m <- result %>% filter(Country == input$country)
@@ -290,7 +312,7 @@ server <- function(input, output) {
     output$tablo  <- DT::renderDataTable({
       
       DT::datatable(
-        { tablo() %>% mutate(Date = format(Date, format = "%b-%Y"))},
+        { tablo() %>% mutate(Date = paste0(year(Date),"-",quarter(Date)))},
         caption = "This table presents growth rate and corresponding business cycle sitation ",  
         extensions = 'Buttons',
         
