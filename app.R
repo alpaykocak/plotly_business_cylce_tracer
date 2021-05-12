@@ -16,6 +16,8 @@ url <-"https://stats.oecd.org/restsdmx/sdmx.ashx/GetData/QNA/AUS+AUT+BEL+CAN+CHL
 gdpgrowth <- readSDMX(url)
 gdpgrowth <- as.data.frame(gdpgrowth)
 gdpgrowth <- gdpgrowth %>% select("Countries" = LOCATION,"Date" = obsTime, "Veri" = obsValue)
+library(readxl)
+
 ulkeler <- unique(gdpgrowth$Countries)
 istenen <- c( "JPN", "MEX", "OECD","NAFTA",
               "TUR", "GBR", "USA",  "BRA",
@@ -32,7 +34,11 @@ init_date <- sort(zaman)[1]
 final_date <- sort(zaman)[lenght_date]
 gdpgrowth <- gdpgrowth %>% 
   filter(Countries %in% istenen) %>% 
-  spread(Countries,Veri) %>%
+  spread(Countries,Veri)
+SAU_INPUT <- read_excel("SAU_INPUT.xlsx")
+SAU_INPUT <- SAU_INPUT %>% select(Date, "SAU" = SAU_GROWTH) %>% na.omit(.) %>% mutate(Date = as.Date(Date))
+gdpgrowth$SAU[match(SAU_INPUT$Date,as.Date(as.yearqtr(gdpgrowth$Date,format="%Y-Q%q")))] <- SAU_INPUT$SAU
+gdpgrowth <- gdpgrowth %>% 
   select(-Date)
 colnames(gdpgrowth) <- names(sort(istenen))
 gdpgrowth <- gdpgrowth[,sort(colnames(gdpgrowth))]
@@ -81,15 +87,95 @@ k <- as.numeric(length(unique(veri$degisken)))
 ui <- dashboardPage(
   dashboardHeader(title = "Business Cycle Dashboard",titleWidth = 500),
     dashboardSidebar(
-      width = 100,
-        sidebarMenu(
-          menuItem("Dashboard", tabName = "dashboard"),
-          menuItem("Results", tabName = "rawdata")
+      width = 150,
+      sidebarMenu(
+        menuItem("What is this?", tabName = "definition", icon = icon("book-open")),
+        menuItem("Dashboard", tabName = "dashboard", icon = icon("dashboard")),
+        menuItem("Results", tabName = "rawdata", icon = icon("th"))
         )  
     ),
   
   dashboardBody(
     tabItems(
+      tabItem("definition",
+              fluidRow(
+              
+                box(status = "info",width = 4,
+                h1("Business Cycle Dashboard"),
+                
+                p("Business Cycle Dashboard is a tool designed to help show the history and current state of economies. 
+                Just as the clock shows the current time, Business Cycle Dashboard shows what the cycle of the economy is. 
+                Business Cycle Dashboard follows the cyclical nature of economic developments. 
+                In cyclical fluctuations; the high growth period is followed by the slow growth period and the subsequent shrinkage period is followed by the recovery period.
+                The situation of the conjuncture for selected countries and country groups is determined using real GDP adjusted for 
+                  seasonal and calendar effects. By collectively submitting the results to fifteen country/country groups,
+                  a general picture of the economy on an international scale is taken for a moment in time."),
+                p("Business Cycle Dashboard can be found in four different situations."),
+                p("- Trend over and descending (on the left-upper side of the dial, in orange),") ,
+                p("- Under the trend and descending (on the left-bottom of the dial, in red),"),
+                p("- Under the trend and ascending (on the right-bottom of the dial, in yellow),"),
+                p("- Trend above and ascending (on the upper right-hand side of the dial, in green),"),
+                p("Each country / country group is represented by a dot on the quadrant, and the location (coordinate) of that point changes depending on time."),
+                p("To obtain Business Cycle Dashboard, the conjuncture component is obtained for the GDP of each country. 
+                  The conjuncture component is the deviations from the long-term trend variable. 
+                  The conjuncture component provides information about whether an indicator is above or below the trend and whether it is increasing or decreasing compared to the previous period. 
+                  The four quadrants on the Business Cycle Dashboard show the four phases of business cycle fluctuations.")),
+             
+                     box(status = "info",width = 4,
+                         h1("Detail Explanation"),
+                p("Closely following national and international developments in the field of economy, 
+                This Company LTD. CO. Makes its Business Cycle Dashboard system developed to facilitate the analysis of 
+                medium-term economic developments for the public. Seasonal and calendar adjusted real GDP, 
+                when focusing on cyclical fluctuations (medium-term movements) after short-term, 
+                periodic and irregular movements are cleared, the message received from 
+                Seasonal and calendar adjusted real GDP becomes clear. Interpretation of 
+                cyclical fluctuations becomes easier with a dynamic graphical presentation. 
+                Combining seasonal and calendar adjusted real GDPs in such a system has two important advantages. 
+                First, it is possible to analyze individual movements of seasonal and calendar adjusted real GDP and 
+                their comparative movements with other countries."),
+                p("Cyclical fluctuations have been the subject of many scientific studies and discussions. 
+                  In order to reveal the ideas put forward on this subject until today, 
+                  a large literature research has been carried out in the national and international field. 
+                  When the literature is reviewed, it is seen that there is no consensus on the nature and causes of cyclical fluctuations."),
+                p("This difference is clearly understood in the studies of Zarnowitz (1987), Prescott (1986), Cooper (1997), Fuhrer and Schuh (1998).
+                Considering that there is no consensus on the theoretical basis of cyclical fluctuations, 
+                it is quite clear that measuring the current situation of the economy will be a controversial issue. 
+                This situation basically turns into a discussion on how to define cyclical fluctuations.")), 
+              
+                     box(status = "info",width = 4,
+                         h1("Literature"),
+                p("Although there are many different opinions on this issue, many economists and researchers refer to 
+                Burns and Mitchell's (1946) definition of business cycles. According to this definition:"),
+                p("'Business cycle fluctuations are the fluctuations experienced in the total economic activities of countries dominated by the private sector. 
+                  A 'conjuncture' of many economic activities at the same time; it covers the periods of expansion, 
+                  then deceleration, contraction and recovery (recovery) to move to the next cycle of the cycle. 
+                  This process is repeated in the given order, but is not periodic.'"),
+                p("In addition, the definition of recession put forward by the United States National Bureau of Economic Research (NBER) 
+                is also very popular (Christiano and Fitzgerald, 1998):"),
+                p("'...recession; defined as a permanent period of decline in aggregate production, income, employment and trade, usually lasting from six months to a year, and is marked by widespread contractions in many sectors of the economy ...'"),
+                p("Various methods are available to define and measure business cycle fluctuations. 
+                The method we use is basically a harmonized method based on Hodrick and Prescott (1997).
+                Although there are many different definitions, it can be said that there is a consensus 
+                in the literature about some features of conjuncture fluctuations 
+                (Christiano & Fitzgerald, 1998; Banerji & Hiris, 2001; Klein & Moore, 1982; Stock & Watson, 1988; Zarnowitz, 1987)."),
+                p("The features agreed upon;"),
+                p("- Business cycle fluctuations are defined as the joint movements of many economic variables. Fluctuations should be evident in expenditure and labor market indicators as well as in production-based indicators. In this respect, the condition of 'prevalence' is a necessary condition. To put it more clearly, the fluctuation should be felt not only in a particular sector but throughout the economy (in many sectors)."),
+                p("- Business cycle fluctuations are repetitive but non-periodic. To be more precise, the transition sequence between the periods of expansion and contraction continues in the same order, but the time intervals between these transitions need not be regular."),
+                p("- Business cycle fluctuations must be precise and continuous; small and short movements do not reflect this situation."),
+                p("International examples are",
+                a(href="https://www.cbs.nl/en-gb/visualisations/business-cycle-tracer", 
+                  "CBS Netherlands",target="_blank"),
+                ", ",
+                a(href="https://ec.europa.eu/economy_finance/graphs/2014-07-07_business_cycle_en.htm", 
+                  "EU Commission",target="_blank"),
+                "and ",
+                a(href="https://ec.europa.eu/eurostat/cache/bcc/bcc.html", 
+                  "Eurostat",target="_blank"),
+                "."
+                )
+                )
+              )
+              ),
       tabItem("dashboard",
               fluidRow(
                 box(
