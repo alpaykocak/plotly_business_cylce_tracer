@@ -12,7 +12,10 @@ library(shinydashboard)
 library(zoo)
 library(rsdmx)
 rm(list=ls())
-url <-"https://stats.oecd.org/restsdmx/sdmx.ashx/GetData/QNA/AUS+AUT+BEL+CAN+CHL+COL+CZE+DNK+EST+FIN+FRA+DEU+GRC+HUN+ISL+IRL+ISR+ITA+JPN+KOR+LTU+LVA+LUX+MEX+NLD+NZL+NOR+POL+PRT+SVK+SVN+ESP+SWE+CHE+TUR+GBR+USA+EA19+EU27_2020+EU15+G-7+NAFTA+OECDE+G-20+OECD+OTF+NMEC+ARG+BRA+BGR+CHN+CRI+IND+IDN+ROU+RUS+SAU+ZAF.B1_GE.GYSA.Q/all?startTime=1997-Q1&endTime=2021-Q1"
+
+url <-paste0("https://stats.oecd.org/restsdmx/sdmx.ashx/GetData/QNA/AUS+AUT+BEL+CAN+CHL+COL+CZE+DNK+EST+FIN+FRA+DEU+GRC+HUN+ISL+IRL+ISR+ITA+JPN+KOR+LTU+LVA+LUX+MEX+NLD+NZL+NOR+POL+PRT+SVK+SVN+ESP+SWE+CHE+TUR+GBR+USA+EA19+EU27_2020+EU15+G-7+NAFTA+OECDE+G-20+OECD+OTF+NMEC+ARG+BRA+BGR+CHN+CRI+IND+IDN+ROU+RUS+SAU+ZAF.B1_GE.GYSA.Q/all?startTime=1997-Q1&endTime=",year(today()),"-Q",quarter(today())-1)
+
+# url <-"https://stats.oecd.org/restsdmx/sdmx.ashx/GetData/QNA/AUS+AUT+BEL+CAN+CHL+COL+CZE+DNK+EST+FIN+FRA+DEU+GRC+HUN+ISL+IRL+ISR+ITA+JPN+KOR+LTU+LVA+LUX+MEX+NLD+NZL+NOR+POL+PRT+SVK+SVN+ESP+SWE+CHE+TUR+GBR+USA+EA19+EU27_2020+EU15+G-7+NAFTA+OECDE+G-20+OECD+OTF+NMEC+ARG+BRA+BGR+CHN+CRI+IND+IDN+ROU+RUS+SAU+ZAF.B1_GE.GYSA.Q/all?startTime=1997-Q1&endTime=2021-Q2"
 gdpgrowth <- readSDMX(url)
 gdpgrowth <- as.data.frame(gdpgrowth)
 gdpgrowth <- gdpgrowth %>% select("Countries" = LOCATION,"Date" = obsTime, "Veri" = obsValue)
@@ -55,7 +58,7 @@ app_init_date <- if (quarter(init_date) == 1 & leap_year(init_date) == T) {init_
 } else { init_date + 88}
 app_final_date <- if (quarter(final_date) == 1 & leap_year(final_date) == T) {final_date + 88 
 } else if (quarter(final_date) == 1 & leap_year(final_date) == F) {final_date + 88 
-} else if (quarter(final_date) == 2) {final_date + 88
+} else if (quarter(final_date) == 2) {final_date + 90
 } else if (quarter(final_date) == 3) {final_date + 88
 } else { final_date + 88}
 
@@ -197,28 +200,28 @@ ui <- dashboardPage(
               ),
               fluidRow(
                 box(
-                  width = 7, status = "info", solidHeader = TRUE, footer = "Calculations based on OECD Data.",
+                  width = 7, status = "info", solidHeader = TRUE, footer = "Calculations based on OECD Data.https://stats.oecd.org/index.aspx?queryid=26674",
                   title = "Business Cycle Situtation of the Selected Countries",
                   plotlyOutput("rectPlot", width = "100%", height = 600)
                 ),
                
                 box(
-                  width = 2, status = "info",solidHeader = TRUE,footer = "Calculations based on OECD Data.",
+                  width = 2, status = "info",solidHeader = TRUE,footer = "Calculations based on OECD Data.https://stats.oecd.org/index.aspx?queryid=26674",
                   title = "Countries in Recession",background = "red",
                   div(tableOutput("packageTable1"), style = "font-size:100%")
                 ),
                 box(
-                  width = 2, status = "info",solidHeader = TRUE,footer = "Calculations based on OECD Data.",
+                  width = 2, status = "info",solidHeader = TRUE,footer = "Calculations based on OECD Data.https://stats.oecd.org/index.aspx?queryid=26674",
                   title = "Countries in Recovery",background = "yellow",
                   div(tableOutput("packageTable2"), style = "font-size:100%")
                 ),
                 box(
-                  width = 2, status = "info",solidHeader = TRUE,footer = "Calculations based on OECD Data.",
+                  width = 2, status = "info",solidHeader = TRUE,footer = "Calculations based on OECD Data.https://stats.oecd.org/index.aspx?queryid=26674",
                   title = "Countries in Slowdown",background = "orange",
                   div(tableOutput("packageTable3"), style = "font-size:100%")
                 ),
                 box(
-                  width = 2, status = "info",solidHeader = TRUE,footer = "Calculations based on OECD Data.",
+                  width = 2, status = "info",solidHeader = TRUE,footer = "Calculations based on OECD Data.https://stats.oecd.org/index.aspx?queryid=26674",
                   title = "Countries in Expansion", background = "green",
                   div(tableOutput("packageTable4"), style = "font-size:100%")
                 )
@@ -236,12 +239,12 @@ ui <- dashboardPage(
                      )
               ),
               box(
-                  width = 5, status = "info", solidHeader = TRUE,footer = "Source: OECD Data.",
+                  width = 5, status = "info", solidHeader = TRUE,footer = "Source: OECD Data.https://stats.oecd.org/index.aspx?queryid=26674",
                   title = "Growth rates of the Selected Countries",
                   plotOutput("graph")
                 ),
               box(
-                width = 4, status = "info",solidHeader = TRUE,footer = "Source: OECD Data. Calculations based on OECD Data.",
+                width = 4, status = "info",solidHeader = TRUE,footer = "Source: OECD Data. Calculations based on OECD Data.https://stats.oecd.org/index.aspx?queryid=26674",
                 title = "Countries Data",
                 DT::dataTableOutput("tablo")
               )
