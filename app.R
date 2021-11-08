@@ -56,11 +56,10 @@ app_init_date <- if (quarter(init_date) == 1 & leap_year(init_date) == T) {init_
 } else if (quarter(init_date) == 2) {init_date + 88
 } else if (quarter(init_date) == 3) {init_date + 88
 } else { init_date + 88}
-app_final_date <- if (quarter(final_date) == 1 & leap_year(final_date) == T) {final_date + 88 
-} else if (quarter(final_date) == 1 & leap_year(final_date) == F) {final_date + 88 
-} else if (quarter(final_date) == 2) {final_date + 90
-} else if (quarter(final_date) == 3) {final_date + 88
-} else { final_date + 88}
+app_final_date <- if (quarter(final_date) == 1) {as.Date(paste0(year(final_date),"-",quarter(final_date)*3,"-31"))
+} else if (quarter(final_date) == 2) {as.Date(paste0(year(final_date),"-",quarter(final_date)*3,"-30"))
+} else if (quarter(final_date) == 3) {as.Date(paste0(year(final_date),"-",quarter(final_date)*3,"-30"))
+} else { as.Date(paste0(year(final_date),"-",quarter(final_date)*3,"-31"))}
 
 datum <- data.frame(tarih = seq(app_init_date,app_final_date,by = "quarters")) 
 date_sim <- data.frame(tarih = seq(app_init_date,app_final_date,by = "days"))
