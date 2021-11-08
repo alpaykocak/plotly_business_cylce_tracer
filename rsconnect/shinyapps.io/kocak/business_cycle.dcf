@@ -5,9 +5,10 @@ account: kocak
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 4079398
-bundleId: 4587699
+bundleId: 5174799
 url: https://kocak.shinyapps.io/business_cycle/
-when: 1620771720.56371
+when: 1635171298.94993
+lastSyncTime: 1635171298.94994
 asMultiple: FALSE
 asStatic: FALSE
-ignoredFiles: data_pull.R|DataGeneric.xml|deneme.xls|README.md|veriseti.xls
+ignoredFiles: app.html|data_pull.R|DataGeneric.xml|deneme.xls|README.md|veriseti.xls
